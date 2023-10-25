@@ -1,6 +1,6 @@
 namespace TestObjectService.Configurations;
 
-public class TestObejctRmqConfig
+public class TestObjectRmqConfig
 {
     public string UserName { get; set; }
     public string Password { get; set; }
@@ -9,7 +9,4 @@ public class TestObejctRmqConfig
     public string Port { get; set; }
     public string ClientProvidedName { get; set; }
     public string ExchangeName { get; set; }
-    public string RoutingKey { get; set; }
-    public string RequestQueue { get; set; }
-    public string ResponseQueue { get; set; }
 }
