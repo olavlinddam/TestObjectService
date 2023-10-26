@@ -117,7 +117,11 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
             };
             var testObject = JsonSerializer.Deserialize<TestObject>(formattedDoc, options);
 
-            context
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                await dbContext.AddAsync(testObject);
+            }
             // Implementer logik her
             return "test";
         }
