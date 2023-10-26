@@ -4,8 +4,6 @@ using TestObjectService.Consumers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.EntityFrameworkCore;
-using TestObjectService.Data;
 
 IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((hostingContext, config) =>
@@ -17,9 +15,6 @@ IHost host = Host.CreateDefaultBuilder(args)
     {
         services.Configure<TestObjectRmqConfig>(context.Configuration.GetSection("TestObjectRmqConfig"));
         services.AddHostedService<AddTestObjectConsumer>();
-
-        services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlServer(context.Configuration.GetConnectionString("DefaultConnection")));
     })
     .Build();
 
