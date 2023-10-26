@@ -11,10 +11,13 @@ namespace TestObjectService.Models
     public class TestObject
     {
         [Key]
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string Type { get; set; }
         public int SerialNr { get; set; }
         public int MachineNr { get; set; }
         public string ImageUrl { get; set; }
+        public List<SniffingPoint> SniffingPoints { get; set; }
+
+
     }
 }
