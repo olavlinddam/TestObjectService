@@ -4,7 +4,8 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using TestObjectService.Configurations;
-
+using TestObjectService.Data;
+using TestObjectService.Models;
 
 namespace TestObjectService.Consumers;
 
@@ -16,9 +17,11 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
     private readonly EventingBasicConsumer _consumer;
     private const string QueueName = "add-single-requests";
     private const string RoutingKey = "add-single-route";
-    
-    public AddTestObjectConsumer(IOptions<TestObjectRmqConfig> config)
+    private readonly IServiceScopeFactory _scopeFactory; 
+
+    public AddTestObjectConsumer(IServiceScopeFactory scopeFactory, IOptions<TestObjectRmqConfig> config) 
     {
+        _scopeFactory = scopeFactory;
         _config = config.Value;
         
         var factory = new ConnectionFactory
@@ -107,7 +110,14 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
         {
             using var doc = JsonDocument.Parse(requestMessage);
             var formattedDoc= doc.RootElement.ToString();
-        
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            };
+            var testObject = JsonSerializer.Deserialize<TestObject>(formattedDoc, options);
+
+            context
             // Implementer logik her
             return "test";
         }
