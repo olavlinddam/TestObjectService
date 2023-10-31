@@ -14,5 +14,6 @@ RUN dotnet publish "TestObjectService.csproj" -c Release -o /app/publish /p:UseA
 
 FROM base AS final
 WORKDIR /app
+COPY TestObjectService/migrations.sql /app/migrations.sql
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "TestObjectService.dll"]

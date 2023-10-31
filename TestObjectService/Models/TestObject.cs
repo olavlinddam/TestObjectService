@@ -13,9 +13,9 @@ namespace TestObjectService.Models
         [Key]
         public Guid Id { get; set; }
         public string Type { get; set; }
-        public int SerialNr { get; set; }
-        public int MachineNr { get; set; }
-        public string ImageUrl { get; set; }
+        public string SerialNr { get; set; }
+        public Guid MachineId { get; set; }
+        public string ImagePath { get; set; }
         public List<SniffingPoint> SniffingPoints { get; set; }
 
 

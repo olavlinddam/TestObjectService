@@ -29,13 +29,22 @@ public static class ConfigInitializer
             // "enablseSettings" is passed here to tell wether or not the file has to exists.
             // reloadOnChange = true means that the file must be reread if changed.
             builder.AddJsonFile("appsettings.json", enableSettings, true);
+            Console.WriteLine("Loaded appsettings.json");
             
             // same as above but taking into account the environment we are in. optional = true because we only want
             // to read in the settings from the appsettings.environment if the file exists. 
-            builder.AddJsonFile($"appsettings.{environment}.json", true, true);
+            if (File.Exists($"appsettings.{environment}.json"))
+            {
+                builder.AddJsonFile($"appsettings.{environment}.json", true, true);
+                Console.WriteLine($"Loaded appsettings.{environment}.json");
+            }
             
             // same as above but for any specific machine.
-            builder.AddJsonFile($"appsettings.{machineName}.json", true, true);
+            if (File.Exists($"appsettings.{machineName}.json"))
+            {
+                builder.AddJsonFile($"appsettings.{machineName}.json", true, true);
+                Console.WriteLine($"Loaded appsettings.{machineName}.json");
+            }
             
             // this line is to be commented out if the local server is not running. 
             //builder.AddJsonFile($"appsettings.ubuntu-local-server.json", true, true);

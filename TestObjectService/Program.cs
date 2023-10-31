@@ -1,26 +1,36 @@
-using TestObjectService;
-using TestObjectService.Configurations;
-using TestObjectService.Consumers;
+using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
+using TestObjectService.Configurations;
+using TestObjectService.Consumers;
 using TestObjectService.Data;
 using Microsoft.EntityFrameworkCore;
 
 IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureAppConfiguration((hostingContext, config) =>
-    {
-        config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-            .AddJsonFile($"appsettings.{hostingContext.HostingEnvironment.EnvironmentName}.json", optional: true, reloadOnChange: true);
-    })
+    .ConfigureAppSettings() // Use the custom configuration setup
     .ConfigureServices((context, services) =>
     {
         services.Configure<TestObjectRmqConfig>(context.Configuration.GetSection("TestObjectRmqConfig"));
         services.AddHostedService<AddTestObjectConsumer>();
 
         services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlServer(context.Configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlServer(context.Configuration.GetConnectionString("DefaultConnection")));
     })
     .Build();
 
+PrintConfiguration(host.Services);
+
 host.Run();
+
+void PrintConfiguration(IServiceProvider services)
+{
+    using (var scope = services.CreateScope())
+    {
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        foreach (var section in config.AsEnumerable())
+        {
+            Console.WriteLine($"{section.Key} = {section.Value}");
+        }
+    }
+}
