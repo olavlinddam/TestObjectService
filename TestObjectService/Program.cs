@@ -25,12 +25,10 @@ host.Run();
 
 void PrintConfiguration(IServiceProvider services)
 {
-    using (var scope = services.CreateScope())
+    using var scope = services.CreateScope();
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    foreach (var section in config.AsEnumerable())
     {
-        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-        foreach (var section in config.AsEnumerable())
-        {
-            Console.WriteLine($"{section.Key} = {section.Value}");
-        }
+        Console.WriteLine($"{section.Key} = {section.Value}");
     }
 }

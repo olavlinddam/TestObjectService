@@ -1,11 +1,15 @@
 using System.Text;
 using System.Text.Json;
+using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using TestObjectService.Configurations;
 using TestObjectService.Data;
 using TestObjectService.Models;
+using TestObjectService.Models.Validation;
 
 namespace TestObjectService.Consumers;
 
@@ -15,8 +19,8 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
     private readonly IConnection _connection;
     private readonly IModel _channel;
     private readonly EventingBasicConsumer _consumer;
-    private const string QueueName = "add-single-requests";
-    private const string RoutingKey = "add-single-route";
+    private const string QueueName = "add-single-test-object-requests";
+    private const string RoutingKey = "add-single-test-object-route";
     private readonly IServiceScopeFactory _scopeFactory; 
 
     public AddTestObjectConsumer(IServiceScopeFactory scopeFactory, IOptions<TestObjectRmqConfig> config) 
@@ -39,7 +43,7 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
         
         _channel.ExchangeDeclare(_config.ExchangeName, ExchangeType.Direct, durable: true);
         
-        _channel.QueueDeclare(QueueName, exclusive: false);
+        _channel.QueueDeclare(queue: QueueName, durable: true, exclusive: false, autoDelete: false, arguments: null);
         _channel.QueueBind(QueueName, _config.ExchangeName, RoutingKey);
     }
 
@@ -56,14 +60,20 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
             throw new Exception($"An error occured: {e.Message}");
         }
 
-
         // Keep the service running until it's stopped or cancelled
         while (!stoppingToken.IsCancellationRequested)
         {
             await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
-            Dispose();
         }
     }
+
+    public override async Task StopAsync(CancellationToken stoppingToken)
+    {
+        Console.WriteLine("AddTestObjectConsumer is stopping.");
+        Dispose(); // Ensure resources are disposed
+        await base.StopAsync(stoppingToken);
+    }
+
 
     public Task StartListening()
     {
@@ -93,6 +103,7 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
                 Console.WriteLine(responseMessage);
                 _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
             };
+            _channel.BasicConsume(QueueName, false, consumer); 
         }
         catch (Exception e)
         {
@@ -108,6 +119,7 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
     {
         try
         {
+            // Serialize the request to a TestObject object
             using var doc = JsonDocument.Parse(requestMessage);
             var formattedDoc= doc.RootElement.ToString();
             var options = new JsonSerializerOptions
@@ -116,14 +128,26 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             };
             var testObject = JsonSerializer.Deserialize<TestObject>(formattedDoc, options);
-
-            using (var scope = _scopeFactory.CreateScope())
+            if (testObject == null) throw new NullReferenceException("Test object was null");
+            
+            // Add the necessary ids. 
+            testObject.Id = Guid.NewGuid();
+            foreach (var point in testObject.SniffingPoints)
             {
-                var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                await dbContext.AddAsync(testObject);
+                point.Id = Guid.NewGuid();
+                point.TestObjectId = testObject.Id;
             }
-            // Implementer logik her
-            return "test";
+
+
+            // Validate the test object
+            await ValidateTestObject(testObject);
+
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await dbContext.AddAsync(testObject);
+            await dbContext.SaveChangesAsync();
+
+            return testObject.Id.ToString();
         }
         catch (Exception e)
         {
@@ -131,10 +155,39 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
             throw;
         }
     }
-    
-    private void Dispose()
+
+    public override void Dispose()
     {
         _channel?.Dispose();
         _connection?.Dispose();
+    }
+
+    private static async Task ValidateTestObject(TestObject testObject)
+    {
+        try
+        {
+            var testObjectValidator = new TestObjectValidator();
+            var validationErrors = new List<string>();
+            
+            var validationResult = await testObjectValidator.ValidateAsync(testObject);
+            if (!validationResult.IsValid)
+            {
+                validationErrors.AddRange(validationResult.Errors.Select(e => e.ErrorMessage));
+            }
+            if (validationErrors.Any())
+            {
+                throw new ValidationException(
+                    $"Some LeakTest objects could not be validated: {string.Join(", ", validationErrors)}");
+            }
+        }
+        catch (ValidationException e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+
+            
+
+
     }
 }

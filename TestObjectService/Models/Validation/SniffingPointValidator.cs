@@ -12,8 +12,7 @@ public class SniffingPointValidator : AbstractValidator<SniffingPoint>
     {
         RuleFor(x => x.Id)
             .NotNull().WithMessage("'Id' cannot be null.")
-            .NotEmpty().WithMessage("'Id' cannot be empty.")
-            .Must(IsValidGuid).WithMessage("'Id' must be a valid GUID.");
+            .NotEmpty().WithMessage("'Id' cannot be empty.");
 
         RuleFor(x => x.Name)
             .NotNull().WithMessage("'Name' cannot be null.")
@@ -29,12 +28,8 @@ public class SniffingPointValidator : AbstractValidator<SniffingPoint>
 
         RuleFor(x => x.TestObjectId)
             .NotNull().WithMessage("'TestObjectId' cannot be null.")
-            .NotEmpty().WithMessage("'TestObjectId' cannot be empty.")
-            .Must(IsValidGuid).WithMessage("'TestObjectId' must be a valid GUID.");
+            .NotEmpty().WithMessage("'TestObjectId' cannot be empty.");
     }
 
-    private bool IsValidGuid(Guid guid)
-    {
-        return guid != Guid.Empty;
-    }
+
 }

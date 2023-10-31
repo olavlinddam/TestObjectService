@@ -11,7 +11,7 @@ namespace TestObjectService.Models
     public class TestObject
     {
         [Key]
-        public Guid Id { get; set; }
+        public Guid? Id { get; set; }
         public string Type { get; set; }
         public string SerialNr { get; set; }
         public Guid MachineId { get; set; }
