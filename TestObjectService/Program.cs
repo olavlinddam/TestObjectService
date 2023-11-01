@@ -13,6 +13,7 @@ IHost host = Host.CreateDefaultBuilder(args)
     {
         services.Configure<TestObjectRmqConfig>(context.Configuration.GetSection("TestObjectRmqConfig"));
         services.AddHostedService<AddTestObjectConsumer>();
+        services.AddHostedService<GetTestObjectConsumer>();
 
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(context.Configuration.GetConnectionString("DefaultConnection")));

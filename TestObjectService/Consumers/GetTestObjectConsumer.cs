@@ -13,17 +13,17 @@ using TestObjectService.Models.Validation;
 
 namespace TestObjectService.Consumers;
 
-public class AddTestObjectConsumer : BackgroundService, IConsumer
+public class GetTestObjectConsumer : BackgroundService, IConsumer
 {
     private readonly TestObjectRmqConfig _config;
     private readonly IConnection _connection;
     private readonly IModel _channel;
     private readonly EventingBasicConsumer _consumer;
-    private const string QueueName = "add-single-test-object-requests";
-    private const string RoutingKey = "add-single-test-object-route";
+    private const string QueueName = "get-single-test-object-requests";
+    private const string RoutingKey = "get-single-test-object-route";
     private readonly IServiceScopeFactory _scopeFactory; 
 
-    public AddTestObjectConsumer(IServiceScopeFactory scopeFactory, IOptions<TestObjectRmqConfig> config) 
+    public GetTestObjectConsumer(IServiceScopeFactory scopeFactory, IOptions<TestObjectRmqConfig> config) 
     {
         _scopeFactory = scopeFactory;
         _config = config.Value;
@@ -78,43 +78,58 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
     public Task StartListening()
     {
         var consumer = new EventingBasicConsumer(_channel);
-        try
+        consumer.Received += async (model, ea) =>
         {
-            consumer.Received += async (model, ea) =>
+            Console.WriteLine($"Received request: {ea.BasicProperties.CorrelationId}");
+            
+            var body = ea.Body.ToArray();
+            var message = Encoding.UTF8.GetString(body);
+
+            string responseMessage;
+            try
             {
-                Console.WriteLine($"Received request: {ea.BasicProperties.CorrelationId}");
+                // Try to process the message
+                responseMessage = await ProcessRequest(message);
+            }
+            catch (ValidationException e)
+            {
+                // Handle the validation exception and prepare an error message
+                Console.WriteLine(e);
+                responseMessage = e.Message;
+            }
+            catch (NullReferenceException e)
+            {
+                // Handle the null reference exception that is thrown if no object matches the provided id. 
+                Console.WriteLine(e);
+                responseMessage = "Null reference:" + string.Join(",", e.Message);
+            }
+            catch (Exception e)
+            {
+                // Handle other exceptions and prepare a generic error message
+                Console.WriteLine(e);
+                responseMessage = "An error occurred: " + e.Message;
+            }
             
-                var body = ea.Body.ToArray();
-                var message = Encoding.UTF8.GetString(body);
+            // Send the response back
+            var responseBody = Encoding.UTF8.GetBytes(responseMessage);
+            
+            var replyProperties = _channel.CreateBasicProperties();
+            replyProperties.CorrelationId = ea.BasicProperties.CorrelationId;
 
-                // Process the message
-                var responseMessage = await ProcessRequest(message);
+            // Responding to the request by sending a message to the exclusive response queue.
+            _channel.BasicPublish(
+                exchange: "",
+                routingKey: ea.BasicProperties.ReplyTo,
+                basicProperties: replyProperties,
+                body: responseBody
+            );
+            
+            Console.WriteLine(responseMessage);
 
-                // Send the response back
-                var responseBody = Encoding.UTF8.GetBytes(responseMessage);
-            
-                var replyProperties = _channel.CreateBasicProperties();
-                replyProperties.CorrelationId = ea.BasicProperties.CorrelationId;
-                
-                _channel.BasicPublish(
-                    exchange: "",
-                    routingKey: ea.BasicProperties.ReplyTo,
-                    basicProperties: replyProperties,
-                    body: responseBody
-                );
-            
-                Console.WriteLine(responseMessage);
-                _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
-            };
-            _channel.BasicConsume(QueueName, false, consumer); 
-        }
-        catch (Exception e)
-        {
-            // log exception here
-            Console.WriteLine(e);
-            throw new Exception(e.Message);
-        }
-        
+            //_channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+        };
+
+        _channel.BasicConsume(QueueName, autoAck: true, consumer: consumer);
         return Task.CompletedTask;
     }
     
@@ -122,35 +137,30 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
     {
         try
         {
-            // Serialize the request to a TestObject object
-            using var doc = JsonDocument.Parse(requestMessage);
-            var formattedDoc= doc.RootElement.ToString();
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-            };
-            var testObject = JsonSerializer.Deserialize<TestObject>(formattedDoc, options);
-            if (testObject == null) throw new NullReferenceException("Test object was null");
-            
-            // Add the necessary ids. 
-            testObject.Id = Guid.NewGuid();
-            foreach (var point in testObject.SniffingPoints)
-            {
-                point.Id = Guid.NewGuid();
-                point.TestObjectId = testObject.Id;
-            }
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var testObject = await dbContext.TestObjects
+                .Include(t => t.SniffingPoints)
+                .SingleOrDefaultAsync(t => t.Id == Guid.Parse(requestMessage));
 
+            if (testObject == null)
+            {
+                throw new NullReferenceException("No object with the provided identifier was found.");
+            }
 
             // Validate the test object
             await ValidateTestObject(testObject);
 
-            using var scope = _scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            await dbContext.AddAsync(testObject);
-            await dbContext.SaveChangesAsync();
+            // Serializing the testObject to be returned as a JsonObject to the response queue.
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            var responseMessage = JsonSerializer.Serialize(testObject, options);
 
-            return testObject.Id.ToString();
+            return responseMessage;
+        }
+        catch (ValidationException e)
+        {
+            Console.WriteLine($"Validation failed: {e.Message}");
+            throw; // Simply re-throw the original exception
         }
         catch (Exception e)
         {
@@ -189,4 +199,5 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
             throw;
         }
     }
+    
 }
