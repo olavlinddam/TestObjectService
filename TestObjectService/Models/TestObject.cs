@@ -17,7 +17,5 @@ namespace TestObjectService.Models
         public Guid MachineId { get; set; }
         public string ImagePath { get; set; }
         public List<SniffingPoint> SniffingPoints { get; set; }
-
-
     }
 }

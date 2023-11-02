@@ -9,11 +9,12 @@ using RabbitMQ.Client.Events;
 using TestObjectService.Configurations;
 using TestObjectService.Data;
 using TestObjectService.Models;
+using TestObjectService.Models.DTOs;
 using TestObjectService.Models.Validation;
 
 namespace TestObjectService.Consumers;
 
-public class AddTestObjectConsumer : BackgroundService, IConsumer
+public class AddTestObjectConsumer : BackgroundService, IConsumer<string>
 {
     private readonly TestObjectRmqConfig _config;
     private readonly IConnection _connection;
@@ -75,46 +76,39 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
     }
 
 
-    public Task StartListening()
+public Task StartListening()
     {
         var consumer = new EventingBasicConsumer(_channel);
-        try
+        consumer.Received += async (model, ea) =>
         {
-            consumer.Received += async (model, ea) =>
-            {
-                Console.WriteLine($"Received request: {ea.BasicProperties.CorrelationId}");
+            Console.WriteLine($"Received request: {ea.BasicProperties.CorrelationId}");
             
-                var body = ea.Body.ToArray();
-                var message = Encoding.UTF8.GetString(body);
+            var body = ea.Body.ToArray();
+            var message = Encoding.UTF8.GetString(body);
 
-                // Process the message
-                var responseMessage = await ProcessRequest(message);
+            var responseMessage = await ProcessRequest(message);
+            
+            
+            // Send the response back
+            var responseBody = Encoding.UTF8.GetBytes(responseMessage);
+            
+            var replyProperties = _channel.CreateBasicProperties();
+            replyProperties.CorrelationId = ea.BasicProperties.CorrelationId;
 
-                // Send the response back
-                var responseBody = Encoding.UTF8.GetBytes(responseMessage);
+            // Responding to the request by sending a message to the exclusive response queue.
+            _channel.BasicPublish(
+                exchange: "",
+                routingKey: ea.BasicProperties.ReplyTo,
+                basicProperties: replyProperties,
+                body: responseBody
+            );
             
-                var replyProperties = _channel.CreateBasicProperties();
-                replyProperties.CorrelationId = ea.BasicProperties.CorrelationId;
-                
-                _channel.BasicPublish(
-                    exchange: "",
-                    routingKey: ea.BasicProperties.ReplyTo,
-                    basicProperties: replyProperties,
-                    body: responseBody
-                );
-            
-                Console.WriteLine(responseMessage);
-                _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
-            };
-            _channel.BasicConsume(QueueName, false, consumer); 
-        }
-        catch (Exception e)
-        {
-            // log exception here
-            Console.WriteLine(e);
-            throw new Exception(e.Message);
-        }
-        
+            Console.WriteLine(responseMessage);
+
+            //_channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+        };
+
+        _channel.BasicConsume(QueueName, autoAck: true, consumer: consumer);
         return Task.CompletedTask;
     }
     
@@ -123,16 +117,15 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
         try
         {
             // Serialize the request to a TestObject object
-            using var doc = JsonDocument.Parse(requestMessage);
-            var formattedDoc= doc.RootElement.ToString();
             var options = new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             };
-            var testObject = JsonSerializer.Deserialize<TestObject>(formattedDoc, options);
-            if (testObject == null) throw new NullReferenceException("Test object was null");
             
+            var testObject = JsonSerializer.Deserialize<TestObject>(requestMessage, options);
+            if (testObject == null) throw new NullReferenceException("Test object was null");
+
             // Add the necessary ids. 
             testObject.Id = Guid.NewGuid();
             foreach (var point in testObject.SniffingPoints)
@@ -150,14 +143,20 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
             await dbContext.AddAsync(testObject);
             await dbContext.SaveChangesAsync();
 
-            return testObject.Id.ToString();
+            return CreateApiResponse(200, testObject, null);
+        }
+        catch (ValidationException e)
+        {
+            Console.WriteLine($"Validation failed: {e.Message}");
+            return CreateApiResponse(400, null, e.Message);
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
-            throw;
+            Console.WriteLine($"An error occurred: {e.Message}");
+            return CreateApiResponse(500, null, e.Message);
         }
     }
+    
 
     public override void Dispose()
     {
@@ -188,5 +187,17 @@ public class AddTestObjectConsumer : BackgroundService, IConsumer
             Console.WriteLine(e);
             throw;
         }
+    }
+    
+    private static string CreateApiResponse(int statusCode, TestObject data, string errorMessage)
+    {
+        var apiResponse = new ApiResponse<TestObject>
+        {
+            StatusCode = statusCode,
+            Data = data,
+            ErrorMessage = errorMessage
+        };
+
+        return JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions { WriteIndented = true });
     }
 }

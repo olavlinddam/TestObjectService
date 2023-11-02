@@ -9,11 +9,12 @@ using RabbitMQ.Client.Events;
 using TestObjectService.Configurations;
 using TestObjectService.Data;
 using TestObjectService.Models;
+using TestObjectService.Models.DTOs;
 using TestObjectService.Models.Validation;
 
 namespace TestObjectService.Consumers;
 
-public class GetTestObjectConsumer : BackgroundService, IConsumer
+public class GetTestObjectConsumer : BackgroundService, IConsumer<string>
 {
     private readonly TestObjectRmqConfig _config;
     private readonly IConnection _connection;
@@ -85,36 +86,15 @@ public class GetTestObjectConsumer : BackgroundService, IConsumer
             var body = ea.Body.ToArray();
             var message = Encoding.UTF8.GetString(body);
 
-            string responseMessage;
-            try
-            {
-                // Try to process the message
-                responseMessage = await ProcessRequest(message);
-            }
-            catch (ValidationException e)
-            {
-                // Handle the validation exception and prepare an error message
-                Console.WriteLine(e);
-                responseMessage = e.Message;
-            }
-            catch (NullReferenceException e)
-            {
-                // Handle the null reference exception that is thrown if no object matches the provided id. 
-                Console.WriteLine(e);
-                responseMessage = "Null reference:" + string.Join(",", e.Message);
-            }
-            catch (Exception e)
-            {
-                // Handle other exceptions and prepare a generic error message
-                Console.WriteLine(e);
-                responseMessage = "An error occurred: " + e.Message;
-            }
+            var responseMessage = await ProcessRequest(message);
+            
             
             // Send the response back
             var responseBody = Encoding.UTF8.GetBytes(responseMessage);
             
             var replyProperties = _channel.CreateBasicProperties();
             replyProperties.CorrelationId = ea.BasicProperties.CorrelationId;
+
 
             // Responding to the request by sending a message to the exclusive response queue.
             _channel.BasicPublish(
@@ -150,22 +130,18 @@ public class GetTestObjectConsumer : BackgroundService, IConsumer
 
             // Validate the test object
             await ValidateTestObject(testObject);
-
-            // Serializing the testObject to be returned as a JsonObject to the response queue.
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var responseMessage = JsonSerializer.Serialize(testObject, options);
-
-            return responseMessage;
+            
+            return CreateApiResponse(200, testObject, null);
         }
         catch (ValidationException e)
         {
             Console.WriteLine($"Validation failed: {e.Message}");
-            throw; // Simply re-throw the original exception
+            return CreateApiResponse(400, null, e.Message);
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
-            throw;
+            Console.WriteLine($"An error occurred: {e.Message}");
+            return CreateApiResponse(500, null, e.Message);
         }
     }
 
@@ -198,6 +174,18 @@ public class GetTestObjectConsumer : BackgroundService, IConsumer
             Console.WriteLine(e);
             throw;
         }
+    }
+    
+    private static string CreateApiResponse(int statusCode, TestObject data, string errorMessage)
+    {
+        var apiResponse = new ApiResponse<TestObject>
+        {
+            StatusCode = statusCode,
+            Data = data,
+            ErrorMessage = errorMessage
+        };
+
+        return JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions { WriteIndented = true });
     }
     
 }

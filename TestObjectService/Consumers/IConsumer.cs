@@ -1,7 +1,7 @@
 namespace TestObjectService.Consumers;
 
-public interface IConsumer
+public interface IConsumer<TResponse>
 {
     public Task StartListening();
-    Task<string> ProcessRequest(string requestMessage);
+    Task<TResponse> ProcessRequest(string requestMessage);
 }
