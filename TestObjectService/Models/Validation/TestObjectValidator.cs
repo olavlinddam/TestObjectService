@@ -35,11 +35,7 @@ public class TestObjectValidator : AbstractValidator<TestObject>
             .NotNull().WithMessage("'S/N' cannot be null.")
             .NotEmpty().WithMessage("'S/N' cannot be empty.")
             .Matches(new Regex(@"^[a-zA-Z0-9-_]+$")).WithMessage("'S/N' can only contain alphanumeric characters, hyphens, and underscores.");
-
-        RuleFor(x => x.MachineId)
-            .NotNull().WithMessage("'Machine id' cannot be null.")
-            .NotEmpty().WithMessage("'Machine id' cannot be empty.")
-            .Must(IsValidGuid).WithMessage("'Machine id' must be a valid GUID.");
+        
 
         RuleFor(x => x.ImagePath)
             .NotNull().WithMessage("'ImagePath' cannot be null.")
