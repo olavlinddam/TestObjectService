@@ -14,17 +14,17 @@ using TestObjectService.Models.Validation;
 
 namespace TestObjectService.Consumers;
 
-public class UpdateTestObjectConsumer : BackgroundService, IConsumer<string>
+public class DeleteTestObjectConsumer : BackgroundService, IConsumer<string>
 {
     private readonly TestObjectRmqConfig _config;
     private readonly IConnection _connection;
     private readonly IModel _channel;
     private readonly EventingBasicConsumer _consumer;
-    private const string QueueName = "update-single-test-object-requests";
-    private const string RoutingKey = "update-single-test-object-route";
+    private const string QueueName = "delete-single-test-object-requests";
+    private const string RoutingKey = "delete-single-test-object-route";
     private readonly IServiceScopeFactory _scopeFactory; 
 
-    public UpdateTestObjectConsumer(IServiceScopeFactory scopeFactory, IOptions<TestObjectRmqConfig> config) 
+    public DeleteTestObjectConsumer(IServiceScopeFactory scopeFactory, IOptions<TestObjectRmqConfig> config) 
     {
         _scopeFactory = scopeFactory;
         _config = config.Value;
@@ -116,38 +116,25 @@ public Task StartListening()
     {
         try
         {
-            // Serialize the request to a TestObject object
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-            };
-
-            var modifiedTestObject = JsonSerializer.Deserialize<TestObject>(requestMessage, options);
-            if (modifiedTestObject == null) throw new NullReferenceException("Test object was null");
-
-            // Validate the test object
-            await ValidateTestObject(modifiedTestObject);
-
             // Pull the corresponding record from the db
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var existingTestObject =
-                await dbContext.TestObjects.SingleOrDefaultAsync(e => e.Id == modifiedTestObject.Id);
+            var testObject =
+                await dbContext.TestObjects.SingleOrDefaultAsync(e => e.Id == Guid.Parse(requestMessage));
 
             // Check if existing object is null and return an error if it is.
-            if (existingTestObject == null)
-                throw new NullReferenceException("The provided id does not match an existing record.");
+            if (testObject == null)
+                throw new NullReferenceException("The provided test object does not match an existing record.");
 
 
-            // Map the updated properties to the retrieved entity
-            dbContext.Entry(existingTestObject).CurrentValues.SetValues(modifiedTestObject);
+            // Delete the record from the database
+            dbContext.TestObjects.Remove(testObject);
 
             // Save changes
             await dbContext.SaveChangesAsync();
 
             // return the updated record
-            return CreateApiResponse(200, modifiedTestObject, null);
+            return CreateApiResponse(200, null, null);
         }
         catch (DbUpdateConcurrencyException e)
         {
@@ -164,11 +151,6 @@ public Task StartListening()
             Console.WriteLine(e.Message);
             return CreateApiResponse(400, null, e.Message);
         }
-        catch (ValidationException e)
-        {
-            Console.WriteLine($"Validation failed: {e.Message}");
-            return CreateApiResponse(400, null, e.Message);
-        }
         catch (Exception e)
         {
             Console.WriteLine($"An error occurred: {e.Message}");
@@ -181,31 +163,6 @@ public Task StartListening()
     {
         _channel?.Dispose();
         _connection?.Dispose();
-    }
-
-    private static async Task ValidateTestObject(TestObject testObject)
-    {
-        try
-        {
-            var testObjectValidator = new TestObjectValidator();
-            var validationErrors = new List<string>();
-            
-            var validationResult = await testObjectValidator.ValidateAsync(testObject);
-            if (!validationResult.IsValid)
-            {
-                validationErrors.AddRange(validationResult.Errors.Select(e => e.ErrorMessage));
-            }
-            if (validationErrors.Any())
-            {
-                throw new ValidationException(
-                    $"Some LeakTest objects could not be validated: {string.Join(", ", validationErrors)}");
-            }
-        }
-        catch (ValidationException e)
-        {
-            Console.WriteLine(e);
-            throw;
-        }
     }
     
     private static string CreateApiResponse(int statusCode, TestObject data, string errorMessage)

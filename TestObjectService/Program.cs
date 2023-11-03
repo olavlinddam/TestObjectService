@@ -15,7 +15,9 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddHostedService<AddTestObjectConsumer>();
         services.AddHostedService<GetTestObjectConsumer>();
         services.AddHostedService<UpdateTestObjectConsumer>();
+        services.AddHostedService<DeleteTestObjectConsumer>();
 
+        
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(context.Configuration.GetConnectionString("DefaultConnection")));
     })
