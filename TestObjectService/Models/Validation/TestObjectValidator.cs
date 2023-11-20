@@ -37,11 +37,11 @@ public class TestObjectValidator : AbstractValidator<TestObject>
             .Matches(new Regex(@"^[a-zA-Z0-9-_]+$")).WithMessage("'S/N' can only contain alphanumeric characters, hyphens, and underscores.");
         
 
-        RuleFor(x => x.ImagePath)
-            .NotNull().WithMessage("'ImagePath' cannot be null.")
-            .NotEmpty().WithMessage("'ImagePath' cannot be empty.")
-            .Must(BeAValidFileName).WithMessage("'ImagePath' must be a valid file name.")
-            .Must(HaveValidImageExtension).WithMessage("'ImagePath' must have a valid image file extension.");
+        // RuleFor(x => x.ImagePath)
+        //     .NotNull().WithMessage("'ImagePath' cannot be null.")
+        //     .NotEmpty().WithMessage("'ImagePath' cannot be empty.")
+        //     .Must(BeAValidFileName).WithMessage("'ImagePath' must be a valid file name.")
+        //     .Must(HaveValidImageExtension).WithMessage("'ImagePath' must have a valid image file extension.");
         
         RuleFor(x => x.SniffingPoints)
             .NotNull().WithMessage("'SniffingPoints' cannot be null.")

@@ -123,31 +123,70 @@ public Task StartListening()
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             };
 
+            Console.WriteLine("Parsing to TestObject from json");
             var modifiedTestObject = JsonSerializer.Deserialize<TestObject>(requestMessage, options);
             if (modifiedTestObject == null) throw new NullReferenceException("Test object was null");
 
+            Console.WriteLine(modifiedTestObject.Id);
+            Console.WriteLine(requestMessage);
             // Validate the test object
             await ValidateTestObject(modifiedTestObject);
 
             // Pull the corresponding record from the db
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var existingTestObject =
-                await dbContext.TestObjects.SingleOrDefaultAsync(e => e.Id == modifiedTestObject.Id);
+            var testObjectToUpdate =
+                await dbContext.TestObjects.Include(x => x.SniffingPoints)
+                    .Where(t => t.Id == modifiedTestObject.Id).SingleOrDefaultAsync();
 
             // Check if existing object is null and return an error if it is.
-            if (existingTestObject == null)
+            if (testObjectToUpdate == null)
+            {
+                Console.WriteLine("no object matched the id in the database");
                 throw new NullReferenceException("The provided id does not match an existing record.");
+            }
 
-
+            Console.WriteLine("Updating Testobject");
             // Map the updated properties to the retrieved entity
-            dbContext.Entry(existingTestObject).CurrentValues.SetValues(modifiedTestObject);
+            dbContext.Entry(testObjectToUpdate).CurrentValues.SetValues(modifiedTestObject);
+            
+            Console.WriteLine("Updating related sniffing points");
+            
+            // Existing SniffingPoints from the database
+            var existingSniffingPoints = testObjectToUpdate.SniffingPoints.ToList();
 
-            // Save changes
+            foreach (var sniffingPoint in modifiedTestObject.SniffingPoints)
+            {
+                var existingSniffingPoint = existingSniffingPoints
+                    .FirstOrDefault(sp => sp.Id == sniffingPoint.Id);
+
+                if (existingSniffingPoint != null)
+                {
+                    // Update existing sniffing point
+                    dbContext.Entry(existingSniffingPoint).CurrentValues.SetValues(sniffingPoint);
+                }
+                else
+                {
+                    // Add new sniffing point
+                    testObjectToUpdate.SniffingPoints.Add(sniffingPoint);
+                }
+            }
+
+            // Handle deleted sniffing points
+            foreach (var existingSniffingPoint in existingSniffingPoints)
+            {
+                if (modifiedTestObject.SniffingPoints.All(sp => sp.Id != existingSniffingPoint.Id))
+                {
+                    // If a sniffing point in the database does not exist in the modified test object, remove it
+                    dbContext.Remove(existingSniffingPoint);
+                }
+            }
+
             await dbContext.SaveChangesAsync();
 
+
             // return the updated record
-            return CreateApiResponse(200, modifiedTestObject, null);
+            return CreateApiResponse(200, testObjectToUpdate, null);
         }
         catch (DbUpdateConcurrencyException e)
         {
@@ -198,7 +237,7 @@ public Task StartListening()
             if (validationErrors.Any())
             {
                 throw new ValidationException(
-                    $"Some LeakTest objects could not be validated: {string.Join(", ", validationErrors)}");
+                    $"The test object could not be validated: {string.Join(", ", validationErrors)}");
             }
         }
         catch (ValidationException e)

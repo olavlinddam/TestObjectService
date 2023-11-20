@@ -1,12 +1,9 @@
-﻿# Use the .NET runtime as the base image for the final container
+﻿# Use the .NET runtime as the base image
 FROM mcr.microsoft.com/dotnet/runtime:7.0 AS base
 WORKDIR /app
 
 # Use the .NET SDK image to build the application
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
-
-RUN dotnet tool install --global dotnet-ef --version 7.0.13
-ENV PATH="$PATH:/root/.dotnet/tools"
 
 WORKDIR /src
 COPY ["TestObjectService/TestObjectService.csproj", "TestObjectService/"]
@@ -19,7 +16,6 @@ RUN dotnet build "TestObjectService.csproj" -c Release -o /app/build
 FROM build AS publish
 RUN dotnet publish "TestObjectService.csproj" -c Release -o /app/publish /p:UseAppHost=true
 
-
 # Final stage/image
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS final
 
@@ -31,3 +27,7 @@ ENV PATH="$PATH:/root/.dotnet/tools"
 
 # Set the command to run your application
 CMD ["dotnet", "TestObjectService.dll"]
+
+
+
+

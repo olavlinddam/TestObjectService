@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <PackageReference Include="FluentValidation" Version="11.8.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Diagnostics.HealthChecks" Version="2.2.0" />
         <PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.13" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="7.0.13">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -33,6 +34,5 @@
 
     <ItemGroup>
       <Folder Include="Migrations\" />
-      <Folder Include="Services\" />
     </ItemGroup>
 </Project>
