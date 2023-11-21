@@ -167,8 +167,15 @@ public Task StartListening()
                 }
                 else
                 {
+
+                    var newSniffingPoint = new SniffingPoint();
+                    newSniffingPoint.Id = Guid.NewGuid();
+                    newSniffingPoint.TestObjectId = testObjectToUpdate.Id;
+                    newSniffingPoint.Name = sniffingPoint.Name
+                    newSniffingPoint.X = sniffingPoint.X
+                    newSniffingPoint.Y = sniffingPoint.Y
                     // Add new sniffing point
-                    testObjectToUpdate.SniffingPoints.Add(sniffingPoint);
+                    testObjectToUpdate.SniffingPoints.Add(newSniffingPoint);
                 }
             }
 
