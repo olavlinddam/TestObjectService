@@ -1,4 +1,4 @@
-# TestObjectService
+# TestObjectService - School project
 
 The TestObjectService is the service responsible for handling CRUD operations related to new test objects. It is part of a microservices application including [GatewayService](https://github.com/olavlinddam/GatewayService) and [LeakTestService](https://github.com/olavlinddam/LeakTestService). The services are containerized and set up as a Docker Swarm to ensure stability and high availability. They communicate via RabbitMQ which makes the application services highly decoupled.
 
